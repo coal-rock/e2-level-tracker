@@ -1,5 +1,9 @@
 use std::collections::HashMap;
 
+use time::OffsetDateTime;
+
+use crate::graph::GraphOptions;
+
 #[derive(PartialEq)]
 pub enum Unit {
     PgML,
@@ -97,18 +101,23 @@ pub const EU: Ester = Ester {
     },
 };
 
+#[derive(Clone)]
 pub struct Dose {
-    pub timestamp: i64,
+    pub datetime: OffsetDateTime,
     pub amount: i32, // mg
     pub ester: &'static Ester,
 }
 
-pub fn calc_graph(doses: Vec<Dose>) -> HashMap<i64, f64> {
+//                                           day x 1000   concentration (pg/ml)
+pub fn calc_graph(graph_options: &GraphOptions) -> Vec<f64> {
     const FIT_DOSE: i32 = 5; // we use a fit dose of 5mg here
-    let mut graph_data: HashMap<i64, f64> = HashMap::new();
 
-    for dose in doses {
-        let mut time = 0.0;
+    let mut concentrations: Vec<f64> = vec![];
+    let increment: f64 = 1.0f64 / graph_options.samples_per_day as f64;
+
+    for dose in &graph_options.doses {
+        let mut time: f64 = 0.0;
+        let mut pos = 0;
 
         let dose_transform = dose.amount as f64 / FIT_DOSE as f64;
 
@@ -116,28 +125,24 @@ pub fn calc_graph(doses: Vec<Dose>) -> HashMap<i64, f64> {
         while time <= 31.0 {
             let concentration = calc_concentration(time, dose.ester) * dose_transform;
 
-            // this is a hack, f64 doesn't implement deterministic hashing used in
-            // hashmaps - as an alternative we multiply the data by 1000 first, round, and cast to
-            // an i64
-            let time_hack = (time * 1000.0).round() as i64;
-            let current_concentration = graph_data.get(&time_hack);
-
-            match current_concentration {
+            match concentrations.get(pos) {
                 Some(current_concentration) => {
-                    graph_data.insert(time_hack, current_concentration + concentration);
+                    concentrations[pos] = concentration + current_concentration;
                 }
                 None => {
-                    graph_data.insert(time_hack, concentration);
+                    concentrations.push(concentration);
                 }
             }
 
-            time += 0.0416666666666
+            time += increment;
+            pos += 1;
         }
     }
 
-    graph_data
+    concentrations
 }
 
+//                      time in days
 pub fn calc_concentration(time: f64, ester: &Ester) -> f64 {
     // we use the V3C model here
     let d = &ester.data;

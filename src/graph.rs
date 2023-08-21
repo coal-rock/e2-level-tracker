@@ -1,49 +1,53 @@
+use crate::esters::Dose;
 use plotters::prelude::*;
 use std::collections::HashMap;
+use time::OffsetDateTime;
 
-pub fn create_graph(points: HashMap<i64, f64>) {
+pub struct GraphOptions {
+    pub date_start: OffsetDateTime,
+    pub date_end: OffsetDateTime,
+    pub samples_per_day: i32,
+    pub doses: Vec<Dose>,
+}
+
+pub fn create_graph(concentrations: &Vec<f64>, graph_options: &GraphOptions) {
+    let now = OffsetDateTime::now_utc();
+
     let root = BitMapBackend::new("assets.png", (640, 480)).into_drawing_area();
     root.fill(&WHITE).unwrap();
 
-    let mut highest_point: f64 = 0.0;
+    let mut highest_concentration: f64 = 0.0;
 
-    // hacky and slow
-    let mut timestamps: Vec<&i64> = points.keys().collect();
-    timestamps.sort();
-
-    let mut scaled_points = vec![];
-
-    for timestamp in timestamps {
-        let point = *points.get(timestamp).unwrap();
-
-        scaled_points.push((
-            (*timestamp as f64) / 1000.0,
-            *points.get(timestamp).unwrap(),
-        ));
-
-        if point > highest_point {
-            highest_point = point;
+    for concentration in concentrations {
+        if concentration > &highest_concentration {
+            highest_concentration = *concentration;
         }
     }
 
     // round to the nearest increment of 100
-    highest_point = (highest_point * 0.01).ceil() / 0.01;
+    highest_concentration = (highest_concentration * 0.1).ceil() / 0.1;
 
     let mut chart = ChartBuilder::on(&root)
         .caption("y=x^2", ("sans-serif", 32).into_font())
         .margin(5)
         .x_label_area_size(30)
         .y_label_area_size(30)
-        .build_cartesian_2d(0.0..32.0, 0.0..highest_point)
+        .build_cartesian_2d(0.0..32.0, 0.0..highest_concentration)
         .unwrap();
 
     chart.configure_mesh().draw().unwrap();
 
     chart
-        .draw_series(LineSeries::new(scaled_points, &RED))
-        .unwrap()
-        .label("y = x^2")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+        .draw_series(LineSeries::new(
+            (0..concentrations.len()).map(|x| {
+                (
+                    x as f64 * (1.0 / graph_options.samples_per_day as f64),
+                    concentrations[x],
+                )
+            }),
+            &RED,
+        ))
+        .unwrap();
 
     chart
         .configure_series_labels()
