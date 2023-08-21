@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[derive(PartialEq)]
 pub enum Unit {
     PgML,
@@ -94,6 +96,47 @@ pub const EU: Ester = Ester {
         k3: &0.03141554,
     },
 };
+
+pub struct Dose {
+    pub timestamp: i64,
+    pub amount: i32, // mg
+    pub ester: &'static Ester,
+}
+
+pub fn calc_graph(doses: Vec<Dose>) -> HashMap<i64, f64> {
+    const FIT_DOSE: i32 = 5; // we use a fit dose of 5mg here
+    let mut graph_data: HashMap<i64, f64> = HashMap::new();
+
+    for dose in doses {
+        let mut time = 0.0;
+
+        let dose_transform = dose.amount as f64 / FIT_DOSE as f64;
+
+        // days
+        while time <= 31.0 {
+            let concentration = calc_concentration(time, dose.ester) * dose_transform;
+
+            // this is a hack, f64 doesn't implement deterministic hashing used in
+            // hashmaps - as an alternative we multiply the data by 1000 first, round, and cast to
+            // an i64
+            let time_hack = (time * 1000.0).round() as i64;
+            let current_concentration = graph_data.get(&time_hack);
+
+            match current_concentration {
+                Some(current_concentration) => {
+                    graph_data.insert(time_hack, current_concentration + concentration);
+                }
+                None => {
+                    graph_data.insert(time_hack, concentration);
+                }
+            }
+
+            time += 0.0416666666666
+        }
+    }
+
+    graph_data
+}
 
 pub fn calc_concentration(time: f64, ester: &Ester) -> f64 {
     // we use the V3C model here

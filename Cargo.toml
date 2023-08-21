@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 serde = { version = "1.0.183", features = ["derive"] }
 figment = { version = "0.10", features = ["toml"] }
-
+plotters = "0.3.5"
