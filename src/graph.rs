@@ -1,4 +1,4 @@
-use crate::esters::Dose;
+use crate::esters::{time_difference, Dose};
 use plotters::prelude::*;
 use std::collections::HashMap;
 use time::OffsetDateTime;
@@ -24,15 +24,17 @@ pub fn create_graph(concentrations: &Vec<f64>, graph_options: &GraphOptions) {
         }
     }
 
-    // round to the nearest increment of 100
+    // round to the nearest increment of 100 (for y key)
     highest_concentration = (highest_concentration * 0.1).ceil() / 0.1;
 
+    let graph_x_axis = time_difference(graph_options.date_start, graph_options.date_end) as f64;
+
     let mut chart = ChartBuilder::on(&root)
-        .caption("y=x^2", ("sans-serif", 32).into_font())
+        .caption("Concentration (pg/mL)", ("sans-serif", 32).into_font())
         .margin(5)
         .x_label_area_size(30)
         .y_label_area_size(30)
-        .build_cartesian_2d(0.0..32.0, 0.0..highest_concentration)
+        .build_cartesian_2d(0.0..graph_x_axis, 0.0..highest_concentration)
         .unwrap();
 
     chart.configure_mesh().draw().unwrap();

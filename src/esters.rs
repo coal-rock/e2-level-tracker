@@ -104,7 +104,7 @@ pub const EU: Ester = Ester {
 #[derive(Clone)]
 pub struct Dose {
     pub datetime: OffsetDateTime,
-    pub amount: i32, // mg
+    pub amount: f64, // mg
     pub ester: &'static Ester,
 }
 
@@ -112,7 +112,11 @@ pub struct Dose {
 pub fn calc_graph(graph_options: &GraphOptions) -> Vec<f64> {
     const FIT_DOSE: i32 = 5; // we use a fit dose of 5mg here
 
-    let mut concentrations: Vec<f64> = vec![];
+    let total_sample_count = graph_options.samples_per_day
+        * (time_difference(graph_options.date_start, graph_options.date_end));
+
+    println!("{:#?}", total_sample_count);
+    let mut concentrations: Vec<f64> = vec![0.0; total_sample_count.try_into().unwrap()];
     let increment: f64 = 1.0f64 / graph_options.samples_per_day as f64;
 
     for dose in &graph_options.doses {
@@ -121,16 +125,25 @@ pub fn calc_graph(graph_options: &GraphOptions) -> Vec<f64> {
 
         let dose_transform = dose.amount as f64 / FIT_DOSE as f64;
 
-        // days
-        while time <= 31.0 {
+        let dose_offset = calc_concentration_offset(
+            graph_options.date_start,
+            dose.datetime,
+            graph_options.samples_per_day,
+        );
+
+        let total_graph_time =
+            (time_difference(graph_options.date_start, graph_options.date_end)) as f64;
+
+        while time <= total_graph_time {
             let concentration = calc_concentration(time, dose.ester) * dose_transform;
 
-            match concentrations.get(pos) {
+            match concentrations.get(pos + dose_offset) {
                 Some(current_concentration) => {
-                    concentrations[pos] = concentration + current_concentration;
+                    concentrations[pos + dose_offset] = concentration + current_concentration;
                 }
                 None => {
-                    concentrations.push(concentration);
+                    println!("pos: {}", pos);
+                    //panic!("error in calculating graph points, we should never be here");
                 }
             }
 
@@ -155,6 +168,18 @@ pub fn calc_concentration(time: f64, ester: &Ester) -> f64 {
                 / ((d.k1 - d.k2) * (d.k1 - d.k3) * (d.k2 - d.k3)));
 }
 
+// calculates the position of our vec the concentration should be in
+// takes in graph starting date, dose date, and samples per day
+pub fn calc_concentration_offset(
+    graph_start_date: OffsetDateTime,
+    dose_date: OffsetDateTime,
+    samples_per_day: i32,
+) -> usize {
+    (time_difference(graph_start_date, dose_date) * samples_per_day)
+        .try_into()
+        .unwrap()
+}
+
 pub fn convert_units(concentration: f64, unit_from: Unit, unit_to: Unit) -> f64 {
     const E2_MOLAR_MASS: f64 = 272.38; // g/mol
 
@@ -166,4 +191,11 @@ pub fn convert_units(concentration: f64, unit_from: Unit, unit_to: Unit) -> f64 
         Unit::PgML => concentration * E2_MOLAR_MASS / 1000.0,
         Unit::PmolL => concentration / E2_MOLAR_MASS * 1000.0,
     }
+}
+
+// takes in two OffsetDateTimes and returns the difference in hours between them in days
+pub fn time_difference(minuend: OffsetDateTime, subtrahend: OffsetDateTime) -> i32 {
+    (((minuend.unix_timestamp() - subtrahend.unix_timestamp()) as f64) / (60.0 * 60.0 * 24.0))
+        .round()
+        .abs() as i32
 }
