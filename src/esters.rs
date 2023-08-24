@@ -23,9 +23,9 @@ struct EsterData {
 }
 
 pub struct Ester {
-    name: &'static str,
-    short_name: &'static str,
-    dose_form: DoseForm,
+    pub name: &'static str,
+    pub short_name: &'static str,
+    pub dose_form: DoseForm,
     data: EsterData,
 }
 
